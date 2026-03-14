@@ -1,0 +1,291 @@
+// 武当内容创作系统 v3.0 - Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表
+model User {
+  id            String    @id @default(uuid())
+  username      String
+  email         String?
+  role          UserRole  @default(EDITOR)
+  avatarUrl     String?
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 关联
+  videos        Video[]
+  tasksAssigned Task[]    @relation("TaskAssignee")
+  tasksCreated  Task[]    @relation("TaskCreator")
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  EDITOR
+  REVIEWER
+}
+
+// 视频表
+model Video {
+  id              String      @id @default(uuid())
+  title           String
+  description     String?
+  theme           VideoTheme  @default(OTHER)
+  status          VideoStatus @default(DRAFT)
+  versions        Int         @default(1)
+  seedanceTaskId  String?
+  videoUrls       Json        @default("[]")
+  metadata        Json        @default("{}")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // 关联
+  createdById     String?
+  createdBy       User?       @relation(fields: [createdById], references: [id])
+  platformContents PlatformContent[]
+  tasks           Task[]
+  calendarEntries ContentCalendar[]
+
+  @@map("videos")
+}
+
+enum VideoTheme {
+  LANDSCAPE
+  TAICHI
+  MARTIAL_ARTS
+  CULTURE
+  OTHER
+}
+
+enum VideoStatus {
+  DRAFT
+  GENERATING
+  COMPLETED
+  FAILED
+  REVIEWING
+  PUBLISHED
+}
+
+// 平台内容表
+model PlatformContent {
+  id              String            @id @default(uuid())
+  platform        Platform
+  title           String?
+  description     String?
+  tags            String[]
+  coverImageUrl   String?
+  videoUrl        String?
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  status          PublishStatus     @default(PENDING)
+  platformVideoId String?
+  platformUrl     String?
+  stats           Json              @default("{}")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // 关联
+  videoId         String
+  video           Video             @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@map("platform_contents")
+}
+
+enum Platform {
+  DOUYIN
+  XIAOHONGSHU
+  KUAISHOU
+  BILIBILI
+  WECHAT_VIDEO
+  WEIBO
+}
+
+enum PublishStatus {
+  PENDING
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+// 热点表
+model Trend {
+  id              String      @id @default(uuid())
+  title           String
+  source          String
+  sourceUrl       String?
+  heatScore       Decimal     @db.Decimal(10, 2)
+  heatLevel       HeatLevel   @default(MEDIUM)
+  riskLevel       RiskLevel   @default(MEDIUM)
+  sentiment       Sentiment   @default(NEUTRAL)
+  isWudangRelated Boolean     @default(false)
+  predictionResult Json?
+  keywords        String[]
+  category        String?
+  createdAt       DateTime    @default(now())
+  expiresAt       DateTime?
+
+  @@index([heatScore])
+  @@index([isWudangRelated])
+  @@index([createdAt])
+  @@map("trends")
+}
+
+enum HeatLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum RiskLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Sentiment {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+// 任务表
+model Task {
+  id              String      @id @default(uuid())
+  title           String
+  description     String?
+  taskType        TaskType    @default(CONTENT)
+  status          TaskStatus  @default(DRAFT)
+  priority        Priority    @default(MEDIUM)
+  dueDate         DateTime?
+  completedAt     DateTime?
+  comments        Json        @default("[]")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // 关联
+  assigneeId      String?
+  assignee        User?       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creatorId       String?
+  creator         User?       @relation("TaskCreator", fields: [creatorId], references: [id])
+  videoId         String?
+  video           Video?      @relation(fields: [videoId], references: [id])
+
+  @@index([status])
+  @@index([assigneeId])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+enum TaskType {
+  CONTENT
+  REVIEW
+  APPROVAL
+  PUBLISH
+}
+
+enum TaskStatus {
+  DRAFT
+  PENDING_REVIEW
+  REVISING
+  PENDING_APPROVAL
+  APPROVED
+  PUBLISHED
+  CANCELLED
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+// 内容日历表
+model ContentCalendar {
+  id              String    @id @default(uuid())
+  scheduledDate   DateTime  @db.Date
+  scheduledTime   DateTime? @db.Time()
+  title           String?
+  status          String    @default("scheduled")
+  createdAt       DateTime  @default(now())
+
+  // 关联
+  videoId         String?
+  video           Video?    @relation(fields: [videoId], references: [id])
+  platformContentId String?
+
+  @@index([scheduledDate])
+  @@index([status])
+  @@map("content_calendar")
+}
+
+// 统计数据表
+model DailyStats {
+  id              String    @id @default(uuid())
+  date            DateTime  @unique @db.Date
+  platform        String?
+  videoCount      Int       @default(0)
+  viewCount       Int       @default(0)
+  likeCount       Int       @default(0)
+  commentCount    Int       @default(0)
+  shareCount      Int       @default(0)
+  newFollowers    Int       @default(0)
+  statsData       Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([date])
+  @@index([platform])
+  @@map("daily_stats")
+}
+
+// 系统配置表
+model SystemConfig {
+  id          String   @id @default(uuid())
+  configKey   String   @unique
+  configValue String?
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+// 视频生成任务队列表
+model VideoGenerationJob {
+  id            String      @id @default(uuid())
+  videoId       String
+  status        JobStatus   @default(PENDING)
+  seedanceJobId String?
+  prompt        String
+  attempts      Int         @default(0)
+  maxAttempts   Int         @default(3)
+  result        Json?
+  error         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  startedAt     DateTime?
+  completedAt   DateTime?
+
+  @@index([status])
+  @@index([videoId])
+  @@map("video_generation_jobs")
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  RETRYING
+}
