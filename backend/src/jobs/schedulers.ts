@@ -1,6 +1,8 @@
 import cron from 'node-cron';
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
+import { publishService } from '../services/publish';
+import { weeklyReportService } from '../services/weeklyReport';
 
 // 定时任务列表
 const tasks: cron.ScheduledTask[] = [];
@@ -34,6 +36,19 @@ export const initSchedulers = () => {
     await generateDailyReport();
   });
   tasks.push(dailyReportTask);
+
+  // 5. 每周一早9点生成并发送周报
+  const weeklyReportTask = cron.schedule('0 9 * * 1', async () => {
+    logger.info('⏰ 生成并发送周报');
+    await generateWeeklyReport();
+  });
+  tasks.push(weeklyReportTask);
+
+  // 6. 每5秒检查一次待发布队列（使用Redis）
+  const publishCheckTask = cron.schedule('*/5 * * * * *', async () => {
+    await publishService.checkAndExecuteScheduled();
+  });
+  tasks.push(publishCheckTask);
 
   logger.info('✅ 定时任务初始化完成');
 };
@@ -125,6 +140,24 @@ const generateDailyReport = async () => {
     logger.info('📈 每日报告生成完成');
   } catch (error) {
     logger.error('❌ 日报生成失败:', error);
+  }
+};
+
+// 生成并发送周报
+const generateWeeklyReport = async () => {
+  try {
+    // 获取所有用户ID
+    const users = await prisma.user.findMany({
+      select: { id: true }
+    });
+    const userIds = users.map(u => u.id);
+
+    // 生成并发送周报
+    await weeklyReportService.sendWeeklyReport(userIds);
+    
+    logger.info('📊 周报生成并发送完成');
+  } catch (error) {
+    logger.error('❌ 周报生成失败:', error);
   }
 };
 

@@ -18,6 +18,7 @@ import taskRoutes from './routes/tasks';
 import statsRoutes from './routes/stats';
 import calendarRoutes from './routes/calendar';
 import systemRoutes from './routes/system';
+import teamRoutes from './routes/team';
 
 // 任务队列
 import { initQueues } from './jobs/queues';
@@ -60,6 +61,7 @@ app.use('/api/v1/tasks', taskRoutes);
 app.use('/api/v1/stats', statsRoutes);
 app.use('/api/v1/calendar', calendarRoutes);
 app.use('/api/v1/system', systemRoutes);
+app.use('/api/v1/team', teamRoutes);
 
 // 错误处理
 app.use(errorHandler);
